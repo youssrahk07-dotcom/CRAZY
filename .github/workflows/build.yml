@@ -3,41 +3,78 @@ name: Build APK
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java
+      - name: Show repository files
+        run: |
+          echo "Repository contents:"
+          ls -la
+          echo "Searching for app.zip:"
+          find . -type f -name "app.zip" -print
+
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
-      - name: Set up Gradle
+      - name: Set up Gradle 8.7
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.7'
+          gradle-version: "8.7"
 
-      - name: Extract app
+      - name: Extract Android app
+        shell: bash
         run: |
-          unzip -q app.zip -d extracted
+          set -e
+
+          APP_ZIP=$(find . -type f -name "app.zip" -print -quit)
+
+          if [ -z "$APP_ZIP" ]; then
+            echo "ERROR: app.zip was not found!"
+            echo "Files in repository:"
+            find . -maxdepth 3 -type f -print
+            exit 1
+          fi
+
+          echo "Found: $APP_ZIP"
+
+          rm -rf extracted
+          mkdir -p extracted
+
+          unzip -q "$APP_ZIP" -d extracted
+
+          echo "ZIP contents:"
+          find extracted -maxdepth 4 -print
+
+          rm -rf app
+
           if [ -d "extracted/app" ]; then
-            mv extracted/app ./app
+            mv extracted/app app
           else
             mkdir -p app
             cp -r extracted/. app/
           fi
-          rm -rf extracted app.zip
 
-      - name: Build APK
-        run: gradle assembleDebug
+          echo "Android app directory:"
+          find app -maxdepth 3 -type f -print
+
+      - name: Build Debug APK
+        run: |
+          gradle assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: NOVA-AI-APK
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
