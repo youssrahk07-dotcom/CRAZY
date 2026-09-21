@@ -1,0 +1,78 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+
+      - name: Extract android_project.zip
+        run: |
+          set -e
+
+          test -f android_project.zip
+
+          rm -rf android_project
+          mkdir android_project
+
+          unzip -q android_project.zip -d android_project
+
+          echo "Extracted files:"
+          find android_project -maxdepth 4 -type f -print
+
+      - name: Find Android project
+        run: |
+          set -e
+
+          SETTINGS=$(find android_project -name "settings.gradle.kts" -type f -print -quit)
+
+          if [ -z "$SETTINGS" ]; then
+            echo "ERROR: settings.gradle.kts not found"
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$SETTINGS")
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+          echo "Android project:"
+          echo "$PROJECT_DIR"
+
+      - name: Show Gradle projects
+        run: |
+          set -e
+          cd "$PROJECT_DIR"
+          gradle projects
+
+      - name: Build APK
+        run: |
+          set -e
+          cd "$PROJECT_DIR"
+          gradle :app:assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NOVA-AI-APK
+          path: |
+            android_project/**/build/outputs/apk/**/*.apk
+          if-no-files-found: error
