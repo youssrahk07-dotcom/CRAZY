@@ -14,13 +14,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Show repository files
-        run: |
-          echo "Repository contents:"
-          ls -la
-          echo "Searching for app.zip:"
-          find . -type f -name "app.zip" -print
-
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
@@ -32,45 +25,51 @@ jobs:
         with:
           gradle-version: "8.7"
 
-      - name: Extract Android app
+      - name: Prepare Android project
         shell: bash
         run: |
           set -e
 
+          echo "Repository:"
+          find . -maxdepth 3 -type f -print
+
+          echo "Copying Gradle files to repository root..."
+          cp .github/workflows/build.gradle.kts ./build.gradle.kts
+          cp .github/workflows/settings.gradle.kts ./settings.gradle.kts
+
+          echo "Finding app.zip..."
           APP_ZIP=$(find . -type f -name "app.zip" -print -quit)
 
           if [ -z "$APP_ZIP" ]; then
-            echo "ERROR: app.zip was not found!"
-            echo "Files in repository:"
-            find . -maxdepth 3 -type f -print
+            echo "ERROR: app.zip not found"
             exit 1
           fi
 
           echo "Found: $APP_ZIP"
 
-          rm -rf extracted
+          rm -rf extracted app
           mkdir -p extracted
 
           unzip -q "$APP_ZIP" -d extracted
 
-          echo "ZIP contents:"
+          echo "Extracted files:"
           find extracted -maxdepth 4 -print
 
-          rm -rf app
-
           if [ -d "extracted/app" ]; then
-            mv extracted/app app
+            mv extracted/app ./app
           else
             mkdir -p app
             cp -r extracted/. app/
           fi
 
-          echo "Android app directory:"
-          find app -maxdepth 3 -type f -print
+          rm -rf extracted
+
+          echo "Final Gradle project:"
+          ls -la
+          ls -la app
 
       - name: Build Debug APK
-        run: |
-          gradle assembleDebug --stacktrace
+        run: gradle assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
