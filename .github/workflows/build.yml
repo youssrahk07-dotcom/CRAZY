@@ -22,6 +22,17 @@ jobs:
         with:
           gradle-version: '8.7'
 
+      - name: Extract app
+        run: |
+          unzip -q app.zip -d extracted
+          if [ -d "extracted/app" ]; then
+            mv extracted/app ./app
+          else
+            mkdir -p app
+            cp -r extracted/. app/
+          fi
+          rm -rf extracted app.zip
+
       - name: Build APK
         run: gradle assembleDebug
 
