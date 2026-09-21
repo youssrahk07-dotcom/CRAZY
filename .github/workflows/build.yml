@@ -25,55 +25,79 @@ jobs:
         with:
           gradle-version: "8.7"
 
-      - name: Prepare Android project
+      - name: Find and extract app.zip
         shell: bash
         run: |
           set -e
 
-          echo "Repository:"
-          find . -maxdepth 3 -type f -print
+          echo "Searching for app.zip..."
 
-          echo "Copying Gradle files to repository root..."
-          cp .github/workflows/build.gradle.kts ./build.gradle.kts
-          cp .github/workflows/settings.gradle.kts ./settings.gradle.kts
-
-          echo "Finding app.zip..."
           APP_ZIP=$(find . -type f -name "app.zip" -print -quit)
 
           if [ -z "$APP_ZIP" ]; then
-            echo "ERROR: app.zip not found"
+            echo "ERROR: app.zip was not found."
+            find . -maxdepth 4 -type f -print
             exit 1
           fi
 
           echo "Found: $APP_ZIP"
 
-          rm -rf extracted app
+          rm -rf extracted
           mkdir -p extracted
 
           unzip -q "$APP_ZIP" -d extracted
 
           echo "Extracted files:"
-          find extracted -maxdepth 4 -print
+          find extracted -maxdepth 5 -print
 
-          if [ -d "extracted/app" ]; then
-            mv extracted/app ./app
+      - name: Locate Android project
+        shell: bash
+        run: |
+          set -e
+
+          if [ -f "extracted/settings.gradle.kts" ]; then
+            echo "Android project found directly in extracted/"
+            echo "PROJECT_DIR=extracted" >> "$GITHUB_ENV"
+
+          elif [ -f "extracted/app/settings.gradle.kts" ]; then
+            echo "Android project found in extracted/app/"
+            echo "PROJECT_DIR=extracted/app" >> "$GITHUB_ENV"
+
+          elif [ -f "extracted/android_project/settings.gradle.kts" ]; then
+            echo "Android project found in extracted/android_project/"
+            echo "PROJECT_DIR=extracted/android_project" >> "$GITHUB_ENV"
+
           else
-            mkdir -p app
-            cp -r extracted/. app/
+            echo "ERROR: settings.gradle.kts was not found."
+            echo "Searching:"
+            find extracted -name "settings.gradle*" -print
+            exit 1
           fi
 
-          rm -rf extracted
-
-          echo "Final Gradle project:"
-          ls -la
-          ls -la app
-
       - name: Build Debug APK
-        run: gradle assembleDebug --stacktrace
+        shell: bash
+        run: |
+          set -e
+
+          echo "Building project from:"
+          echo "$PROJECT_DIR"
+
+          cd "$PROJECT_DIR"
+
+          echo "Project files:"
+          ls -la
+
+          gradle assembleDebug --stacktrace
+
+      - name: Find APK
+        shell: bash
+        run: |
+          echo "Searching for APK..."
+          find extracted -type f -name "*.apk" -print
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: NOVA-AI-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: extracted/**/*.apk
           if-no-files-found: error
